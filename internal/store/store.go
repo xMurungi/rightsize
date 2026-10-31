@@ -4,28 +4,29 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	_ "modernc.org/sqlite"
+
 	"rightsize/internal/aggregator"
 	"rightsize/internal/model"
-	"time"
 )
 
-type Store struct {
+type Store struct{
 	db *sql.DB
 }
 
 const schema = `
-CREATE TABLE IF NOT EXISTS usage_hourly(
-	hour INTEGER NOT NULL, -- unix seconds, start of the hour (UTC)
-	namespace TEXT NOT NULL,
-	workload TEXT NOT NULL,
-	container TEXT NOT NULL,
-	samples INTEGER NOT NULL,
-	cpu_avg REAL NOT NULL, -- millicores
-	cpu_max INTEGER NOT NULL,
-	mem_avg REAL NOT NULL, -- bytes
-	mem_max INTEGER NOT NULL,
+CREATE TABLE IF NOT EXISTS usage_hourly (
+	hour      INTEGER NOT NULL,  -- unix seconds, start of the hour (UTC)
+	namespace TEXT    NOT NULL,
+	workload  TEXT    NOT NULL,
+	container TEXT    NOT NULL,
+	samples   INTEGER NOT NULL,
+	cpu_avg   REAL    NOT NULL,  -- millicores
+	cpu_max   INTEGER NOT NULL,
+	mem_avg   REAL    NOT NULL,  -- bytes
+	mem_max   INTEGER NOT NULL,
 	PRIMARY KEY (hour, namespace, workload, container)
 );`
 
@@ -50,7 +51,7 @@ func (store *Store) Close() error {
 }
 
 // SaveHourly writes hourly rows. If a row for the same hour and container
-// already exists (for example after a restart mid-hour), the two are merged
+// already exists (for example after a restart mid-hour), the two are merged.
 func (store *Store) SaveHourly(ctx context.Context, rows []aggregator.Hourly) error {
 
 	transaction, err := store.db.BeginTx(ctx, nil)
@@ -70,7 +71,8 @@ func (store *Store) SaveHourly(ctx context.Context, rows []aggregator.Hourly) er
 				cpu_max = MAX(cpu_max, excluded.cpu_max),
 				mem_max = MAX(mem_max, excluded.mem_max),
 				samples = samples + excluded.samples`,
-			row.Hour.Unix(), row.Key.Namespace, row.Key.Workload, row.Key.Container, row.Samples, row.CPUAvg, row.CPUMax, row.MemAvg, row.MemMax)
+			row.Hour.Unix(), row.Key.Namespace, row.Key.Workload, row.Key.Container,
+			row.Samples, row.CPUAvg, row.CPUMax, row.MemAvg, row.MemMax)
 		if err != nil {
 			return fmt.Errorf("save %v: %w", row.Key, err)
 		}
@@ -91,11 +93,11 @@ type WindowStat struct {
 func (store *Store) Window(ctx context.Context, since time.Time) ([]WindowStat, error) {
 	rows, err := store.db.QueryContext(ctx, `
 		SELECT namespace, workload, container,
-			COUNT(*)
-			SUM(cpu_avg * samples) / SUM(samples),
-			MAX(cpu_max),
-			SUM(mem_avg * samples) / SUM(samples),
-			MAX(mem_max)
+		       COUNT(*),
+		       SUM(cpu_avg * samples) / SUM(samples),
+		       MAX(cpu_max),
+		       SUM(mem_avg * samples) / SUM(samples),
+		       MAX(mem_max)
 		FROM usage_hourly
 		WHERE hour >= ?
 		GROUP BY namespace, workload, container
@@ -117,6 +119,6 @@ func (store *Store) Window(ctx context.Context, since time.Time) ([]WindowStat, 
 		}
 		stats = append(stats, stat)
 	}
-
+	
 	return stats, rows.Err()
 }
