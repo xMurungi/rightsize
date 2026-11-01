@@ -92,3 +92,73 @@ func TestPruneDeletesOnlyOlderHours(t *testing.T) {
 		t.Errorf("hours left = %d, want 2 (10:00 and 11:00)", stats[0].HoursOfData)
 	}
 }
+
+func TestSaveSpecsLatestWinsButOOMOnlyMovesForward(t *testing.T) {
+	ctx := context.Background()
+	hourlyStore, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hourlyStore.Close()
+
+	key := model.Key{Namespace: "payments", Workload: "api", Container: "app"}
+	oomTime := time.Date(2026, 10, 30, 9, 30, 0, 0, time.UTC)
+	now := time.Date(2026, 10, 30, 10, 0, 0, 0, time.UTC)
+
+	first := model.Spec{Key: key, MemRequestBytes: 1000, LastOOM: oomTime}
+	if err := hourlyStore.SaveSpecs(ctx, []model.Spec{first}, now); err != nil {
+		t.Fatal(err)
+	}
+	// Later: someone lowered the request, and the fresh pod has no OOM in its status.
+	second := model.Spec{Key: key, MemRequestBytes: 500}
+	if err := hourlyStore.SaveSpecs(ctx, []model.Spec{second}, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	specs, err := hourlyStore.Specs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("got %d specs, want 1", len(specs))
+	}
+	if specs[0].MemRequestBytes != 500 {
+		t.Errorf("request = %d, want 500 (latest wins)", specs[0].MemRequestBytes)
+	}
+	if !specs[0].LastOOM.Equal(oomTime) {
+		t.Errorf("last OOM = %v, want %v (must not be forgotten)", specs[0].LastOOM, oomTime)
+	}
+}
+
+func TestPruneDeletesStaleSpecs(t *testing.T) {
+	ctx := context.Background()
+	hourlyStore, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hourlyStore.Close()
+
+	deletedKey := model.Key{Namespace: "ns", Workload: "deleted-app", Container: "app"}
+	liveKey := model.Key{Namespace: "ns", Workload: "live-app", Container: "app"}
+	cutoff := time.Date(2026, 10, 30, 10, 0, 0, 0, time.UTC)
+
+	// The deleted app was last seen before the cutoff; the live one after it.
+	if err := hourlyStore.SaveSpecs(ctx, []model.Spec{{Key: deletedKey, MemRequestBytes: 1000}}, cutoff.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := hourlyStore.SaveSpecs(ctx, []model.Spec{{Key: liveKey, MemRequestBytes: 1000}}, cutoff.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := hourlyStore.Prune(ctx, cutoff); err != nil {
+		t.Fatal(err)
+	}
+
+	specs, err := hourlyStore.Specs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(specs) != 1 || specs[0].Key != liveKey {
+		t.Fatalf("specs after prune = %+v, want only the live app", specs)
+	}
+}

@@ -28,6 +28,19 @@ CREATE TABLE IF NOT EXISTS usage_hourly (
 	mem_avg   REAL    NOT NULL,  -- bytes
 	mem_max   INTEGER NOT NULL,
 	PRIMARY KEY (hour, namespace, workload, container)
+);
+CREATE TABLE IF NOT EXISTS requests (
+	namespace     TEXT    NOT NULL,
+	workload      TEXT    NOT NULL,
+	container     TEXT    NOT NULL,
+	cpu_request   INTEGER NOT NULL,
+	mem_request   INTEGER NOT NULL,
+	cpu_limit     INTEGER NOT NULL,
+	mem_limit     INTEGER NOT NULL,
+	restarts      INTEGER NOT NULL,
+	oom_last_seen INTEGER NOT NULL DEFAULT 0,  -- unix seconds, 0 = never
+	updated_at    INTEGER NOT NULL,
+	PRIMARY KEY (namespace, workload, container)
 );`
 
 func Open(path string) (*Store, error) {
@@ -124,10 +137,95 @@ func (store *Store) Window(ctx context.Context, since time.Time) ([]WindowStat, 
 }
 
 func (store *Store) Prune(ctx context.Context, before time.Time) error {
-	_, err := store.db.ExecContext(ctx, `
-		DELETE FROM usage_hourly 
-		WHERE hour < ?
-	`, before.Unix())
 
-	return err
+	transaction, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	
+	defer transaction.Rollback()
+
+	if _, err := transaction.ExecContext(ctx,
+		`DELETE FROM usage_hourly WHERE hour < ?`, before.Unix()); err != nil {
+		return fmt.Errorf("prune usage_hourly: %w", err)
+	}
+
+	if _, err := transaction.ExecContext(ctx,
+		`DELETE FROM requests WHERE updated_at < ?`, before.Unix()); err != nil {
+		return fmt.Errorf("prune requests: %w", err)
+	}
+
+	return transaction.Commit()
+}
+
+// SaveSpecs stores the latest requests. Unlike usage, requests are overwritten:
+// the newest value wins. The one exception is the last-OOM time, which only
+// moves forward, so a redeploy (a fresh pod with a clean status) can't make us forget.
+func (store *Store) SaveSpecs(ctx context.Context, specs []model.Spec, now time.Time) error {
+
+	transaction, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer transaction.Rollback()
+
+	for _, spec := range specs {
+		var lastOOM int64
+
+		if !spec.LastOOM.IsZero() {
+			lastOOM = spec.LastOOM.Unix()
+		}
+
+		_, err := transaction.ExecContext(ctx, `
+			INSERT INTO requests (namespace, workload, container, cpu_request, mem_request,cpu_limit, mem_limit, restarts, oom_last_seen, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (namespace, workload, container) DO UPDATE SET
+				cpu_request   = excluded.cpu_request,
+				mem_request   = excluded.mem_request,
+				cpu_limit     = excluded.cpu_limit,
+				mem_limit     = excluded.mem_limit,
+				restarts      = excluded.restarts,
+				oom_last_seen = MAX(oom_last_seen, excluded.oom_last_seen),
+				updated_at    = excluded.updated_at`,
+			spec.Key.Namespace, spec.Key.Namespace, spec.Key.Container, spec.CPURequestMilli, spec.MemRequestBytes, spec.CPULimitMilli, spec.MemLimitBytes, spec.Restarts, lastOOM, now.Unix())
+
+		if err != nil {
+			return fmt.Errorf("save spec %v: %w", spec.Key, err)
+		}
+	}
+	return transaction.Commit()
+}
+
+func (store *Store) Specs(ctx context.Context) ([]model.Spec, error) {
+
+	rows, err := store.db.QueryContext(ctx, `
+		SELECT namespace, workload, container, cpu_request, mem_request, cpu_limit, mem_limit, restarts, oom_last_seen
+		FROM requests
+		ORDER BY namespace, workload, container`)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var specs []model.Spec
+	for rows.Next() {
+		var spec model.Spec
+		var lastOOM int64
+
+		err := rows.Scan(&spec.Key.Namespace, &spec.Key.Workload, &spec.Key.Container, &spec.CPURequestMilli,
+			&spec.MemRequestBytes, &spec.CPULimitMilli, &spec.MemLimitBytes, &spec.Restarts, &lastOOM)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if lastOOM > 0 {
+			spec.LastOOM = time.Unix(lastOOM, 0).UTC()
+		}
+
+		specs = append(specs, spec)
+	}
+	return specs, rows.Err()
 }

@@ -10,5 +10,5 @@ import (
 // this method *is* a Source, with no "implements" keyword. That's why the
 // interface lives with the consumer's needs, and why it's tiny.
 type Source interface {
-	Usage(ctx context.Context) ([]model.Usage, error)
+	Snapshot(ctx context.Context) (model.Snapshot, error)
 }

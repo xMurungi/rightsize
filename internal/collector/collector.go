@@ -47,15 +47,21 @@ func (collector *Collector) Run(ctx context.Context) {
 }
 
 func (collector *Collector) poll(ctx context.Context) {
-	usages, err := collector.source.Usage(ctx)
+	snapshot, err := collector.source.Snapshot(ctx)
 	if err != nil {
-		log.Printf("collector: read usage: %v", err)
-		return // skip this tick; one bad poll must not stop the collector
+		log.Printf("collector: read snapshot: %v", err)
+		return // skip this tickk; one bad poll must not stop the collector
 	}
 
-	finished := collector.aggregator.Add(collector.now(), usages)
+	now := collector.now()
+
+	finished := collector.aggregator.Add(now, snapshot.Usages)
 	collector.pending = append(collector.pending, finished...)
 	collector.savePending(ctx)
+
+	if err := collector.store.SaveSpecs(ctx, snapshot.Specs, now); err != nil {
+		log.Printf("collector: save specs: %v", err) // not fatal: the next poll sends fresh ones
+	}
 }
 
 func (collector *Collector) savePending(ctx context.Context) {
