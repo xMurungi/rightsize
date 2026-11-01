@@ -27,10 +27,10 @@ func TestHourRolloverSavesFinishedHour(t *testing.T) {
 	defer hourlyStore.Close()
 
 	key := model.Key{Namespace: "payments", Workload: "api", Container: "app"}
-	
+
 	src := &scriptedSource{snapshot: model.Snapshot{
 		Usages: []model.Usage{{Key: key, MemBytes: 100}},
-		Specs: []model.Spec{{Key: key, MemRequestBytes: 1000}},
+		Specs:  []model.Spec{{Key: key, MemRequestBytes: 1000}},
 	}}
 
 	clock := time.Date(2026, 10, 30, 10, 59, 0, 0, time.UTC)
