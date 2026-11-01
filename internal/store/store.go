@@ -12,7 +12,7 @@ import (
 	"rightsize/internal/model"
 )
 
-type Store struct{
+type Store struct {
 	db *sql.DB
 }
 
@@ -119,6 +119,15 @@ func (store *Store) Window(ctx context.Context, since time.Time) ([]WindowStat, 
 		}
 		stats = append(stats, stat)
 	}
-	
+
 	return stats, rows.Err()
+}
+
+func (store *Store) Prune(ctx context.Context, before time.Time) error {
+	_, err := store.db.ExecContext(ctx, `
+		DELETE FROM usage_hourly 
+		WHERE hour < ?
+	`, before.Unix())
+
+	return err
 }

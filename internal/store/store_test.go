@@ -53,3 +53,42 @@ func TestSaveMergesSameHourAndWindowCombinesHours(t *testing.T) {
 		t.Errorf("MemMax = %v, want 500", got.MemMax)
 	}
 }
+
+func TestPruneDeletesOnlyOlderHours(t *testing.T) {
+	ctx := context.Background()
+	hourlyStore, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hourlyStore.Close()
+
+	key := model.Key{Namespace: "payments", Workload: "api", Container: "app"}
+	hour09 := time.Date(2026, 10, 30, 9, 0, 0, 0, time.UTC)
+	hour10 := hour09.Add(time.Hour)
+	hour11 := hour10.Add(time.Hour)
+
+	var rows []aggregator.Hourly
+
+	for _, hour := range []time.Time{hour09, hour10, hour11} {
+		rows = append(rows, aggregator.Hourly{Hour: hour, Key: key, Samples: 1, MemAvg: 100, MemMax: 100})
+	}
+	
+	if err := hourlyStore.SaveHourly(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := hourlyStore.Prune(ctx, hour10); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := hourlyStore.Window(ctx, hour09)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) != 1 {
+		t.Fatalf("got %d containers, want 1", len(stats))
+	}
+	if stats[0].HoursOfData != 2 {
+		t.Errorf("hours left = %d, want 2 (10:00 and 11:00)", stats[0].HoursOfData)
+	}
+}
