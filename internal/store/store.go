@@ -142,7 +142,7 @@ func (store *Store) Prune(ctx context.Context, before time.Time) error {
 	if err != nil {
 		return err
 	}
-	
+
 	defer transaction.Rollback()
 
 	if _, err := transaction.ExecContext(ctx,
@@ -188,7 +188,7 @@ func (store *Store) SaveSpecs(ctx context.Context, specs []model.Spec, now time.
 				restarts      = excluded.restarts,
 				oom_last_seen = MAX(oom_last_seen, excluded.oom_last_seen),
 				updated_at    = excluded.updated_at`,
-			spec.Key.Namespace, spec.Key.Namespace, spec.Key.Container, spec.CPURequestMilli, spec.MemRequestBytes, spec.CPULimitMilli, spec.MemLimitBytes, spec.Restarts, lastOOM, now.Unix())
+			spec.Key.Namespace, spec.Key.Workload, spec.Key.Container, spec.CPURequestMilli, spec.MemRequestBytes, spec.CPULimitMilli, spec.MemLimitBytes, spec.Restarts, lastOOM, now.Unix())
 
 		if err != nil {
 			return fmt.Errorf("save spec %v: %w", spec.Key, err)
