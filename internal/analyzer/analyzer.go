@@ -73,12 +73,12 @@ func Classify(spec model.Spec, stat store.WindowStat, config Config, now time.Ti
 
 // wastePercent: waste as a % of what was requested; 0 if nothing was requested.
 func wastePercent(waste, request int64) float64 {
-	// 
+	//
 }
 
 // recommend: maxUsed * (1+margin), rounded UP to a multiple of step.
-func recommend(maxUsed int64, margin float64, step int64) int64 { 
-	// 
+func recommend(maxUsed int64, margin float64, step int64) int64 {
+	//
 }
 
 func ClassifyMe(spec model.Spec, stat store.WindowStat, config Config, now time.Time) Row {
@@ -95,12 +95,12 @@ func ClassifyMe(spec model.Spec, stat store.WindowStat, config Config, now time.
 		MemRequestBytes:     spec.MemRequestBytes,
 		MemMaxBytes:         max(stat.MemMax, spec.MemRequestBytes),
 		MemWasteBytes:       max(0, spec.MemRequestBytes-stat.MemMax),
-		MemWastePct:         max(0, float64(spec.MemRequestBytes) - float64(stat.MemMax)) / float64(spec.MemRequestBytes) * 100,
+		MemWastePct:         max(0, float64(spec.MemRequestBytes)-float64(stat.MemMax)) / float64(spec.MemRequestBytes) * 100,
 		MemRecommendedBytes: int64(stat.MemMax * (1.0 + int64(stat.MemAvg)) / 10),
 		CPURequestMilli:     spec.CPURequestMilli,
 		CPUMaxMilli:         stat.CPUMax,
 		CPUWasteMilli:       max(0, spec.CPURequestMilli-stat.CPUMax),
-		CPUWastePct:         max(0, float64(spec.CPURequestMilli) - float64(stat.CPUMax)) / float64(spec.CPURequestMilli) * 100,
+		CPUWastePct:         max(0, float64(spec.CPURequestMilli)-float64(stat.CPUMax)) / float64(spec.CPURequestMilli) * 100,
 		CPURecommendedMilli: stat.CPUMax * (1.0 + int64(stat.CPUAvg)) / 10,
 	}
 
@@ -111,6 +111,6 @@ func ClassifyMe(spec model.Spec, stat store.WindowStat, config Config, now time.
 		// memory max > memory request       -> under-provisioned  (memory only: CPU bursting is normal)
 		resultRow.Status = StatusUnder
 	}
-	
+
 	return resultRow
 }
