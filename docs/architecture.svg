@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 672" width="960" height="672" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title id="t">rightsize architecture</title>
+  <desc id="d">Kubernetes API and metrics-server feed a source. The collector polls it every minute and passes usage to the aggregator, which emits one hourly row per container to a SQLite store. On request the analyzer compares the last 7 days of usage with the requested resources and the API serves the result as JSON to a Backstage plugin.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="672" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="24" y="34" font-size="20" font-weight="700" fill="#0f172a">rightsize: finding over-provisioned Kubernetes containers</text>
+  <text x="24" y="56" font-size="12.5" fill="#475569">One copy per cluster. Compares what containers requested with what they actually used over 7 days.</text>
+
+  <!-- Pod boundary -->
+  <rect x="232" y="72" width="688" height="384" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="248" y="92" font-size="12" font-weight="600" fill="#475569">rightsize pod  ·  1 per cluster  ·  replicas: 1  ·  strategy: Recreate</text>
+
+  <!-- Cluster inputs -->
+  <text x="24" y="92" font-size="10.5" font-weight="700" fill="#6366f1">CLUSTER (read-only)</text>
+  <rect x="24" y="100" width="160" height="60" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="36" y="120" font-size="13.5" font-weight="700" fill="#0f172a">Kubernetes API</text>
+  <text x="36" y="136" font-size="11" fill="#334155">pod requests, limits,</text>
+  <text x="36" y="150" font-size="11" fill="#334155">restarts, OOMKilled</text>
+
+  <rect x="24" y="170" width="160" height="60" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="36" y="190" font-size="13.5" font-weight="700" fill="#0f172a">metrics-server</text>
+  <text x="36" y="206" font-size="11" fill="#334155">live CPU + memory</text>
+  <text x="36" y="220" font-size="11" fill="#334155">per pod (working set)</text>
+
+  <!-- Row 1: source, collector, aggregator -->
+  <g>
+    <rect x="252" y="108" width="160" height="106" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+    <text x="264" y="132" font-size="15" font-weight="700" fill="#0f172a">source</text>
+    <text x="264" y="154" font-size="11.5" fill="#334155">Reads the cluster:</text>
+    <text x="264" y="169" font-size="11.5" fill="#334155">usage + requests.</text>
+    <text x="264" y="184" font-size="11.5" fill="#334155">Real client: later</text>
+    <rect x="264" y="192" width="54" height="16" rx="8" fill="#dcfce7"/>
+    <text x="291" y="204" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">fake ✓</text>
+  </g>
+  <g>
+    <rect x="488" y="108" width="160" height="106" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+    <text x="500" y="132" font-size="15" font-weight="700" fill="#0f172a">collector</text>
+    <text x="500" y="154" font-size="11.5" fill="#334155">The loop. Polls every</text>
+    <text x="500" y="169" font-size="11.5" fill="#334155">minute, retries failed</text>
+    <text x="500" y="184" font-size="11.5" fill="#334155">saves, flushes on stop</text>
+    <rect x="500" y="192" width="44" height="16" rx="8" fill="#dcfce7"/>
+    <text x="522" y="204" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">done</text>
+  </g>
+  <g>
+    <rect x="724" y="108" width="160" height="106" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+    <text x="736" y="132" font-size="15" font-weight="700" fill="#0f172a">aggregator</text>
+    <text x="736" y="154" font-size="11.5" fill="#334155">Notepad for this hour:</text>
+    <text x="736" y="169" font-size="11.5" fill="#334155">count, sum, max per</text>
+    <text x="736" y="184" font-size="11.5" fill="#334155">container. 1 row per hour</text>
+    <rect x="736" y="192" width="44" height="16" rx="8" fill="#dcfce7"/>
+    <text x="758" y="204" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">done</text>
+  </g>
+
+  <!-- Row 2: api, analyzer, store -->
+  <g>
+    <rect x="252" y="296" width="160" height="106" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+    <text x="264" y="320" font-size="15" font-weight="700" fill="#0f172a">api</text>
+    <text x="264" y="342" font-size="11.5" fill="#334155">GET /workloads (JSON)</text>
+    <text x="264" y="357" font-size="11.5" fill="#334155">GET /healthz</text>
+    <text x="264" y="372" font-size="11.5" fill="#334155">filters: namespace, status</text>
+    <rect x="264" y="380" width="44" height="16" rx="8" fill="#e5e7eb"/>
+    <text x="286" y="392" font-size="10.5" font-weight="700" fill="#374151" text-anchor="middle">later</text>
+  </g>
+  <g>
+    <rect x="488" y="296" width="160" height="106" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+    <text x="500" y="320" font-size="15" font-weight="700" fill="#0f172a">analyzer</text>
+    <text x="500" y="342" font-size="11.5" fill="#334155">Used vs requested:</text>
+    <text x="500" y="357" font-size="11.5" fill="#334155">waste, recommendation,</text>
+    <text x="500" y="372" font-size="11.5" fill="#334155">status (over/under/ok)</text>
+    <rect x="500" y="380" width="44" height="16" rx="8" fill="#fef3c7"/>
+    <text x="522" y="392" font-size="10.5" font-weight="700" fill="#92400e" text-anchor="middle">next</text>
+  </g>
+  <g>
+    <rect x="724" y="296" width="160" height="106" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+    <text x="736" y="320" font-size="15" font-weight="700" fill="#0f172a">store (SQLite)</text>
+    <text x="736" y="342" font-size="11.5" fill="#334155">The ledger. Upserts</text>
+    <text x="736" y="357" font-size="11.5" fill="#334155">hourly rows, answers</text>
+    <text x="736" y="372" font-size="11.5" fill="#334155">7-day window queries</text>
+    <rect x="736" y="380" width="44" height="16" rx="8" fill="#dcfce7"/>
+    <text x="758" y="392" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">done</text>
+    <rect x="786" y="380" width="86" height="16" rx="8" fill="#fef3c7"/>
+    <text x="829" y="392" font-size="10.5" font-weight="700" fill="#92400e" text-anchor="middle">+ requests tbl</text>
+  </g>
+
+  <!-- Consumer -->
+  <text x="24" y="288" font-size="10.5" font-weight="700" fill="#ea580c">CONSUMER (separate step)</text>
+  <rect x="24" y="296" width="160" height="106" rx="8" fill="#fff7ed" stroke="#fb923c" stroke-width="1.5"/>
+  <text x="36" y="320" font-size="14" font-weight="700" fill="#0f172a">Backstage plugin</text>
+  <text x="36" y="342" font-size="11.5" fill="#334155">Colours each row by</text>
+  <text x="36" y="357" font-size="11.5" fill="#334155">waste %, merging JSON</text>
+  <text x="36" y="372" font-size="11.5" fill="#334155">from every cluster</text>
+  <rect x="36" y="380" width="44" height="16" rx="8" fill="#e5e7eb"/>
+  <text x="58" y="392" font-size="10.5" font-weight="700" fill="#374151" text-anchor="middle">later</text>
+
+  <!-- Arrows -->
+  <g stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="184" y1="130" x2="252" y2="148"/>
+    <line x1="184" y1="200" x2="252" y2="176"/>
+    <line x1="412" y1="161" x2="488" y2="161"/>
+    <line x1="648" y1="161" x2="724" y2="161"/>
+    <line x1="804" y1="214" x2="804" y2="296"/>
+    <line x1="724" y1="349" x2="648" y2="349"/>
+    <line x1="488" y1="349" x2="412" y2="349"/>
+    <line x1="252" y1="349" x2="184" y2="349"/>
+  </g>
+
+  <!-- Step badges -->
+  <g fill="#0f172a">
+    <circle cx="450" cy="138" r="10"/>
+    <circle cx="686" cy="138" r="10"/>
+    <circle cx="782" cy="255" r="10"/>
+    <circle cx="686" cy="326" r="10"/>
+    <circle cx="450" cy="326" r="10"/>
+    <circle cx="208" cy="326" r="10"/>
+  </g>
+  <g fill="#ffffff" font-size="11" font-weight="700" text-anchor="middle">
+    <text x="450" y="142">1</text>
+    <text x="686" y="142">1</text>
+    <text x="782" y="259">2</text>
+    <text x="686" y="330">3</text>
+    <text x="450" y="330">3</text>
+    <text x="208" y="330">3</text>
+  </g>
+
+  <!-- Arrow labels (what data travels on each arrow) -->
+  <g font-size="11" fill="#334155" text-anchor="middle">
+    <text x="450" y="181">Usage[]</text>
+    <text x="450" y="194">Spec[]</text>
+    <text x="686" y="181">Usage[]</text>
+    <text x="686" y="194">+ time</text>
+    <text x="686" y="369">WindowStat</text>
+    <text x="686" y="382">last 7 days</text>
+    <text x="450" y="369">Row[]</text>
+    <text x="450" y="382">+ status</text>
+    <text x="208" y="369">JSON</text>
+    <text x="208" y="382">(HTTP)</text>
+  </g>
+  <g font-size="11" fill="#334155">
+    <text x="816" y="251">Hourly rows</text>
+    <text x="816" y="265">1 per container</text>
+  </g>
+
+  <!-- Notes under boxes -->
+  <g font-size="11" font-style="italic" fill="#475569" text-anchor="middle">
+    <text x="332" y="424">listens on :8080</text>
+    <text x="568" y="424">waste = requested − max used</text>
+    <text x="804" y="424">file on a 1Gi volume (PVC)</text>
+  </g>
+
+  <!-- How it runs -->
+  <text x="24" y="476" font-size="13" font-weight="700" fill="#0f172a">How it runs (numbers match the badges above)</text>
+
+  <g>
+    <rect x="24" y="486" width="293" height="104" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+    <circle cx="46" cy="510" r="11" fill="#0f172a"/>
+    <text x="46" y="514" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+    <text x="66" y="515" font-size="13.5" font-weight="700" fill="#0f172a">Every minute · memory only</text>
+    <text x="40" y="540" font-size="11.5" fill="#334155">Source returns usage; the collector feeds it</text>
+    <text x="40" y="556" font-size="11.5" fill="#334155">to the aggregator, which updates count, sum,</text>
+    <text x="40" y="572" font-size="11.5" fill="#334155">max per container. Raw readings are dropped.</text>
+  </g>
+  <g>
+    <rect x="333" y="486" width="293" height="104" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+    <circle cx="355" cy="510" r="11" fill="#0f172a"/>
+    <text x="355" y="514" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+    <text x="375" y="515" font-size="13.5" font-weight="700" fill="#0f172a">Every hour · written to disk</text>
+    <text x="349" y="540" font-size="11.5" fill="#334155">On entering a new hour the aggregator emits</text>
+    <text x="349" y="556" font-size="11.5" fill="#334155">one row per container (avg, max, count).</text>
+    <text x="349" y="572" font-size="11.5" fill="#334155">The store saves it; same-hour rows merge.</text>
+  </g>
+  <g>
+    <rect x="642" y="486" width="293" height="104" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+    <circle cx="664" cy="510" r="11" fill="#0f172a"/>
+    <text x="664" y="514" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+    <text x="684" y="515" font-size="13.5" font-weight="700" fill="#0f172a">On request · read side</text>
+    <text x="658" y="540" font-size="11.5" fill="#334155">API asks the store for the last 7 days,</text>
+    <text x="658" y="556" font-size="11.5" fill="#334155">joins them with requests, computes waste,</text>
+    <text x="658" y="572" font-size="11.5" fill="#334155">status and a recommended size, returns JSON.</text>
+  </g>
+
+  <!-- Footer -->
+  <text x="24" y="616" font-size="11.5" fill="#475569">Key = namespace / workload / container (not pod name: pods churn, replicas merge into one key).</text>
+  <text x="24" y="632" font-size="11.5" fill="#475569">Units: CPU in millicores, memory in bytes, always integers. Memory measure = working set.</text>
+
+  <!-- Legend -->
+  <rect x="24" y="644" width="44" height="16" rx="8" fill="#dcfce7"/>
+  <text x="46" y="656" font-size="10.5" font-weight="700" fill="#166534" text-anchor="middle">done</text>
+  <rect x="76" y="644" width="44" height="16" rx="8" fill="#fef3c7"/>
+  <text x="98" y="656" font-size="10.5" font-weight="700" fill="#92400e" text-anchor="middle">next</text>
+  <rect x="128" y="644" width="44" height="16" rx="8" fill="#e5e7eb"/>
+  <text x="150" y="656" font-size="10.5" font-weight="700" fill="#374151" text-anchor="middle">later</text>
+  <text x="182" y="656" font-size="11" fill="#475569">status as of 2026-11-01</text>
+</svg>

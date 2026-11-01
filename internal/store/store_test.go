@@ -72,7 +72,7 @@ func TestPruneDeletesOnlyOlderHours(t *testing.T) {
 	for _, hour := range []time.Time{hour09, hour10, hour11} {
 		rows = append(rows, aggregator.Hourly{Hour: hour, Key: key, Samples: 1, MemAvg: 100, MemMax: 100})
 	}
-	
+
 	if err := hourlyStore.SaveHourly(ctx, rows); err != nil {
 		t.Fatal(err)
 	}
