@@ -34,12 +34,12 @@ var fakeWorkloads = []fakeWorkload{
 		cpuTypicalMilli: 300, memTypicalBytes: 700 * mebibyte,
 	},
 	{ // over-booked
-		key:             model.Key{Namespace: "dukamarketplace", Workload: "slackbot", Container: "app"},
+		key:             model.Key{Namespace: "stripe-ledger", Workload: "slackbot", Container: "app"},
 		cpuRequestMilli: 500, memRequestBytes: 1 * gibibyte,
 		cpuTypicalMilli: 40, memTypicalBytes: 180 * mebibyte,
 	},
 	{ // uses MORE than it booked, and was OOMKilled
-		key:             model.Key{Namespace: "dukamarketplace", Workload: "knowledge-processor", Container: "app"},
+		key:             model.Key{Namespace: "stripe-ledger", Workload: "stripe-ledger", Container: "app"},
 		cpuRequestMilli: 250, memRequestBytes: 512 * mebibyte,
 		cpuTypicalMilli: 200, memTypicalBytes: 620 * mebibyte,
 		oomKilled: true,

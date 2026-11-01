@@ -34,7 +34,7 @@ type response struct {
 	Cluster     string     `json:"cluster"`
 	GeneratedAt time.Time  `json:"generated_at"`
 	WindowHours int        `json:"window_hours"`
-	Workloads   []workload `json:"workload"`
+	Workloads   []workload `json:"workloads"`
 }
 
 func (server *Server) Handler() http.Handler {
@@ -79,7 +79,7 @@ func (server *Server) workloads(w http.ResponseWriter, r *http.Request) {
 	workloads := []workload{} // empty slice, not nil: JSON gives [] instead of null
 
 	for _, spec := range specs {
-		if namespaceFilter == "" && spec.Key.Namespace != namespaceFilter {
+		if namespaceFilter != "" && spec.Key.Namespace != namespaceFilter {
 			continue
 		}
 
@@ -98,7 +98,7 @@ func (server *Server) workloads(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	r.Header.Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(response{
 		Cluster:     server.Cluster,
 		GeneratedAt: now,
