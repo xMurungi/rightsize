@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"math"
 	"rightsize/internal/model"
 	"rightsize/internal/store"
 	"time"
@@ -64,21 +65,55 @@ func Classify(spec model.Spec, stat store.WindowStat, config Config, now time.Ti
 
 	// Step A: numbers. Only if stat.HoursOfData > 0:
 	//   waste = max(0, request - max used), then waste %, using the helpers below.
+	if stat.HoursOfData > 0 {
+		waste := max(0, spec.CPURequestMilli - stat.CPUMax)
+		cpuwastepct := wastePercent(waste, spec.CPURequestMilli)
+		row.CPUWasteMilli = waste
+		row.CPUWastePct = cpuwastepct
+
+		wasteMem := max(0, spec.MemRequestBytes - stat.MemMax)
+		memwastepct := wastePercent(wasteMem, spec.MemRequestBytes)
+		row.MemWasteBytes = wasteMem
+		row.MemWastePct = memwastepct
+	}
 	// Step B: recommendations = max used * (1 + config.Margin), rounded up.
+	recommendationsCPU := float64(stat.CPUMax) * (1 + config.Margin)
+	row.CPURecommendedMilli = int64(recommendationsCPU)
+
+	recommendationsMem := float64(stat.MemMax) * (1 + config.Margin)
+	row.MemRecommendedBytes = int64(recommendationsMem)
 	// Step C: status, in this order, return as soon as one matches:
 	//   do-not-shrink, insufficient-data, no-request, under-provisioned, over-provisioned, ok
-
+	switch {
+	case row.MemRecommendedBytes <= 20:
+		row.Status = StatusDoNotShrink
+	case stat.HoursOfData < 0:
+		row.Status = StatusInsufficientData
+	case spec.CPURequestMilli == 0 || spec.MemRequestBytes == 0:
+		row.Status = StatusNoRequest
+	case spec.LastOOM.IsZero():
+		row.Status = StatusUnder
+	case recommendationsCPU > 20 || recommendationsMem > 20:
+		row.Status = StatusOver
+	default:
+		row.Status = StatusOK
+	}
 	return row
 }
 
 // wastePercent: waste as a % of what was requested; 0 if nothing was requested.
 func wastePercent(waste, request int64) float64 {
-	//
+	if request == 0 {
+		return 0
+	}
+
+	return float64(waste) / float64(request) * 100
 }
 
 // recommend: maxUsed * (1+margin), rounded UP to a multiple of step.
 func recommend(maxUsed int64, margin float64, step int64) int64 {
-	//
+	val := float64(maxUsed) * (1+margin)
+	return int64(math.Ceil(val/float64(step))) * step
 }
 
 func ClassifyMe(spec model.Spec, stat store.WindowStat, config Config, now time.Time) Row {
