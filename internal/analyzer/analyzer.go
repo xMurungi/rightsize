@@ -54,6 +54,12 @@ type Row struct {
 
 // Classify compares what a container booked with what it used over the window.
 func Classify(spec model.Spec, stat store.WindowStat, config Config, now time.Time) Row {
+
+	const (
+		cpuStepMilli    = 10
+		memoryStepBytes = 1 << 20 // 1 MiB
+	)
+
 	row := Row{
 		Key:             spec.Key,
 		HoursOfData:     stat.HoursOfData,
@@ -66,34 +72,36 @@ func Classify(spec model.Spec, stat store.WindowStat, config Config, now time.Ti
 	// Step A: numbers. Only if stat.HoursOfData > 0:
 	//   waste = max(0, request - max used), then waste %, using the helpers below.
 	if stat.HoursOfData > 0 {
-		waste := max(0, spec.CPURequestMilli - stat.CPUMax)
+		waste := max(0, spec.CPURequestMilli-stat.CPUMax)
 		cpuwastepct := wastePercent(waste, spec.CPURequestMilli)
 		row.CPUWasteMilli = waste
 		row.CPUWastePct = cpuwastepct
 
-		wasteMem := max(0, spec.MemRequestBytes - stat.MemMax)
+		wasteMem := max(0, spec.MemRequestBytes-stat.MemMax)
 		memwastepct := wastePercent(wasteMem, spec.MemRequestBytes)
 		row.MemWasteBytes = wasteMem
 		row.MemWastePct = memwastepct
 	}
 	// Step B: recommendations = max used * (1 + config.Margin), rounded up.
-	recommendationsCPU := float64(stat.CPUMax) * (1 + config.Margin)
-	row.CPURecommendedMilli = int64(recommendationsCPU)
+	row.CPURecommendedMilli = recommend(stat.CPUMax, config.Margin, cpuStepMilli)
 
-	recommendationsMem := float64(stat.MemMax) * (1 + config.Margin)
-	row.MemRecommendedBytes = int64(recommendationsMem)
+	row.MemRecommendedBytes = recommend(stat.MemMax, config.Margin, memoryStepBytes)
 	// Step C: status, in this order, return as soon as one matches:
 	//   do-not-shrink, insufficient-data, no-request, under-provisioned, over-provisioned, ok
 	switch {
-	case row.MemRecommendedBytes <= 20:
+	case !spec.LastOOM.IsZero() && now.Sub(spec.LastOOM) <= config.OOMWindow:
 		row.Status = StatusDoNotShrink
-	case stat.HoursOfData < 0:
+		row.CPURecommendedMilli = spec.CPURequestMilli // leave it alone: a human should look
+		row.MemRecommendedBytes = spec.MemRequestBytes
+	case stat.HoursOfData < config.MinHours:
 		row.Status = StatusInsufficientData
-	case spec.CPURequestMilli == 0 || spec.MemRequestBytes == 0:
+		row.CPURecommendedMilli = 0 // not enough data to recommend anything
+		row.MemRecommendedBytes = 0
+	case spec.CPURequestMilli == 0 && spec.MemRequestBytes == 0:
 		row.Status = StatusNoRequest
-	case spec.LastOOM.IsZero():
+	case stat.MemMax > spec.MemRequestBytes:
 		row.Status = StatusUnder
-	case recommendationsCPU > 20 || recommendationsMem > 20:
+	case row.CPUWastePct >= config.WasteWarnPct || row.MemWastePct >= config.WasteWarnPct:
 		row.Status = StatusOver
 	default:
 		row.Status = StatusOK
@@ -112,7 +120,7 @@ func wastePercent(waste, request int64) float64 {
 
 // recommend: maxUsed * (1+margin), rounded UP to a multiple of step.
 func recommend(maxUsed int64, margin float64, step int64) int64 {
-	val := float64(maxUsed) * (1+margin)
+	val := float64(maxUsed) * (1 + margin)
 	return int64(math.Ceil(val/float64(step))) * step
 }
 
