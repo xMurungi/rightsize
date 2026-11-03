@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"rightsize/internal/analyzer"
 	"rightsize/internal/api"
 	"rightsize/internal/collector"
 	"rightsize/internal/source"
@@ -22,6 +23,10 @@ func main() {
 	cluster := flag.String("cluster", "local", "cluster name shown in responses")
 	interval := flag.Duration("interval", time.Minute, "how often to read metrics")
 	windowDays := flag.Int("window-days", 7, "days of history to compare")
+
+	margin := flag.Float64("margin", 0.2, "headroom added to max usage in recommendations (0.2 = +20%)")
+	minHours := flag.Int("min-hours", 24, "hours of data needed before results are trusted")
+
 	flag.Parse()
 
 	// ctx is cancelled on Ctrl-C or SIGTERM (what Kubernetes sends on shutdown).
@@ -47,6 +52,12 @@ func main() {
 		Cluster: *cluster,
 		Window:  time.Duration(*windowDays) * 24 * time.Hour,
 		Now:     func() time.Time { return time.Now().UTC() },
+		Config: analyzer.Config{
+			Margin:       *margin,
+			MinHours:     *minHours,
+			OOMWindow:    7 * 24 * time.Hour,
+			WasteWarnPct: 30,
+		},
 	}
 
 	httpServer := &http.Server{
