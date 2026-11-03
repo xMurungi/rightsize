@@ -2,8 +2,10 @@ package api
 
 import (
 	"net/http"
+	"rightsize/internal/analyzer"
 	"rightsize/internal/model"
 	"rightsize/internal/store"
+	"sort"
 	"time"
 
 	"encoding/json"
@@ -14,20 +16,30 @@ type Server struct {
 	Store   *store.Store
 	Cluster string
 	Window  time.Duration
+	Config  analyzer.Config
 	Now     func() time.Time
 }
 
 type workload struct {
-	Namespace       string `json:"namespace"`
-	Workload        string `json:"workload"`
-	Container       string `json:"container"`
-	HoursOfData     int    `json:"hours_of_data"`
-	MemRequestBytes int64  `json:"mem_request_bytes"`
-	MemAvgBytes     int64  `json:"mem_avg_bytes"`
-	MemMaxBytes     int64  `json:"mem_max_bytes"`
-	CPURequestMilli int64  `json:"cpu_request_millicores"`
-	CPUAvgMilli     int64  `json:"cpu_avg_millicores"`
-	CPUMaxMilli     int64  `json:"cpu_max_millicores"`
+	Namespace   string `json:"namespace"`
+	Workload    string `json:"workload"`
+	Container   string `json:"container"`
+	Status      string `json:"status"`
+	HoursOfData int    `json:"hours_of_data"`
+
+	MemRequestBytes     int64   `json:"mem_request_bytes"`
+	MemAvgBytes         int64   `json:"mem_avg_bytes"`
+	MemMaxBytes         int64   `json:"mem_max_bytes"`
+	MemWasteBytes       int64   `json:"mem_waste_bytes"`
+	MemWastePct         float64 `json:"mem_waste_pct"`
+	MemRecommendedBytes int64   `json:"mem_recommended_bytes"`
+
+	CPURequestMilli     int64   `json:"cpu_request_millicores"`
+	CPUAvgMilli         int64   `json:"cpu_avg_millicores"`
+	CPUMaxMilli         int64   `json:"cpu_max_millicores"`
+	CPUWasteMilli       int64   `json:"cpu_waste_millicores"`
+	CPUWastePct         float64 `json:"cpu_waste_pct"`
+	CPURecommendedMilli int64   `json:"cpu_recommended_millicores"`
 }
 
 type response struct {
@@ -76,27 +88,46 @@ func (server *Server) workloads(w http.ResponseWriter, r *http.Request) {
 	}
 
 	namespaceFilter := r.URL.Query().Get("namespace")
-	workloads := []workload{} // empty slice, not nil: JSON gives [] instead of null
+	statusFilter := r.URL.Query().Get("status")
 
+	workloads := []workload{}
 	for _, spec := range specs {
 		if namespaceFilter != "" && spec.Key.Namespace != namespaceFilter {
 			continue
 		}
 
-		stat := statsByKey[spec.Key] // no usage yet? we get the zero value: HoursOfData 0
+		stat := statsByKey[spec.Key]
+		row := analyzer.Classify(spec, stat, server.Config, now)
+
+		if statusFilter != "" && row.Status != statusFilter {
+			continue
+		}
+
 		workloads = append(workloads, workload{
-			Namespace:       spec.Key.Namespace,
-			Workload:        spec.Key.Workload,
-			Container:       spec.Key.Container,
-			HoursOfData:     stat.HoursOfData,
-			MemRequestBytes: spec.MemRequestBytes,
-			MemAvgBytes:     int64(stat.MemAvg),
-			MemMaxBytes:     stat.MemMax,
-			CPURequestMilli: spec.CPURequestMilli,
-			CPUAvgMilli:     int64(stat.CPUAvg),
-			CPUMaxMilli:     stat.CPUMax,
+			Namespace:           row.Key.Namespace,
+			Workload:            row.Key.Workload,
+			Container:           row.Key.Container,
+			Status:              row.Status,
+			HoursOfData:         row.HoursOfData,
+			MemRequestBytes:     row.MemRequestBytes,
+			MemAvgBytes:         int64(stat.MemAvg),
+			MemMaxBytes:         row.MemMaxBytes,
+			MemWasteBytes:       row.MemWasteBytes,
+			MemWastePct:         row.MemWastePct,
+			MemRecommendedBytes: row.MemRecommendedBytes,
+			CPURequestMilli:     row.CPURequestMilli,
+			CPUAvgMilli:         int64(stat.CPUAvg),
+			CPUMaxMilli:         row.CPUMaxMilli,
+			CPUWasteMilli:       row.CPUWasteMilli,
+			CPUWastePct:         row.CPUWastePct,
+			CPURecommendedMilli: row.CPURecommendedMilli,
 		})
 	}
+
+	// Biggest memory waste first: the list people read from the top.
+	sort.SliceStable(workloads, func(i, j int) bool {
+		return workloads[i].MemWasteBytes > workloads[j].MemWasteBytes
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(response{
