@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"rightsize/internal/aggregator"
+	"rightsize/internal/analyzer"
 	"rightsize/internal/model"
 	"rightsize/internal/store"
 )
@@ -38,7 +39,11 @@ func TestWorkloadsJoinsBookedWithUsed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := &Server{Store: hourlyStore, Cluster: "test", Window: 7 * 24 * time.Hour, Now: func() time.Time { return now }}
+	server := &Server{
+		Store: hourlyStore, Cluster: "test", Window: 7 * 24 * time.Hour,
+		Config: analyzer.Config{Margin: 0.2, MinHours: 1, OOMWindow: 7 * 24 * time.Hour, WasteWarnPct: 30},
+		Now:    func() time.Time { return now },
+	}
 	recorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(recorder, httptest.NewRequest("GET", "/workloads", nil))
 
@@ -53,10 +58,11 @@ func TestWorkloadsJoinsBookedWithUsed(t *testing.T) {
 		t.Fatalf("got %d workloads, want 2", len(got.Workloads))
 	}
 	// Ordered by namespace, workload, container: "api" comes before "brand-new".
-	if got.Workloads[0].HoursOfData != 1 || got.Workloads[0].MemMaxBytes != 300 || got.Workloads[0].MemRequestBytes != 1000 {
-		t.Errorf("first workload = %+v, want 1 hour, max 300, request 1000", got.Workloads[0])
+	api, brandNew := got.Workloads[0], got.Workloads[1]
+	if api.Status != "over-provisioned" || api.MemWasteBytes != 700 {
+		t.Errorf("api = %+v, want over-provisioned with 700 bytes of waste", api)
 	}
-	if got.Workloads[1].HoursOfData != 0 || got.Workloads[1].MemMaxBytes != 0 {
-		t.Errorf("brand-new workload = %+v, want zero hours of data and zero max", got.Workloads[1])
+	if brandNew.Status != "insufficient-data" || brandNew.MemWasteBytes != 0 {
+		t.Errorf("brand-new = %+v, want insufficient-data and NO waste (no data is not 100%% waste)", brandNew)
 	}
 }
