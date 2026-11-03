@@ -86,6 +86,14 @@ func TestClassify(t *testing.T) {
 			wantMemWaste:       0,
 			wantMemRecommended: 72 * mebibyte,
 		},
+		{
+			name:               "only memory requested still gets analysed",
+			spec:               model.Spec{MemRequestBytes: 2048 * mebibyte}, // no CPU request
+			stat:               store.WindowStat{HoursOfData: 168, MemMax: 300 * mebibyte},
+			wantStatus:         StatusOver,
+			wantMemWaste:       1748 * mebibyte,
+			wantMemRecommended: 360 * mebibyte,
+		},
 	}
 
 	for _, test := range tests {
