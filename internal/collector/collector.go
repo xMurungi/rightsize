@@ -14,6 +14,7 @@ type Collector struct {
 	aggregator *aggregator.Aggregator
 	store      *store.Store
 	interval   time.Duration
+	Retention  time.Duration       // how long hourly rows are kept; 0 means never prune
 	now        func() time.Time    // a field so tests can fake the clock
 	pending    []aggregator.Hourly // finished hours not yet safely saved
 }
@@ -50,7 +51,7 @@ func (collector *Collector) poll(ctx context.Context) {
 	snapshot, err := collector.source.Snapshot(ctx)
 	if err != nil {
 		log.Printf("collector: read snapshot: %v", err)
-		return // skip this tickk; one bad poll must not stop the collector
+		return // skip this tick; one bad poll must not stop the collector
 	}
 
 	now := collector.now()
@@ -75,6 +76,12 @@ func (collector *Collector) savePending(ctx context.Context) {
 	}
 
 	collector.pending = nil
+	if collector.Retention > 0 {
+		cutoff := collector.now().Add(-collector.Retention)
+		if err := collector.store.Prune(ctx, cutoff); err != nil {
+			log.Printf("collector: prune: %v", err) // not fatal
+		}
+	}
 }
 
 func (collector *Collector) shutdown() {

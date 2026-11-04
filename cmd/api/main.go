@@ -27,6 +27,8 @@ func main() {
 	margin := flag.Float64("margin", 0.2, "headroom added to max usage in recommendations (0.2 = +20%)")
 	minHours := flag.Int("min-hours", 24, "hours of data needed before results are trusted")
 
+	retentionDays := flag.Int("retention-days", 14, "days of hourly rows to keep")
+
 	flag.Parse()
 
 	// ctx is cancelled on Ctrl-C or SIGTERM (what Kubernetes sends on shutdown).
@@ -41,6 +43,8 @@ func main() {
 
 	collectorLoop := collector.New(source.NewFake(time.Now().UnixNano()), hourlyStore, *interval)
 	collectorDone := make(chan struct{})
+	// ...after flag.Parse() and creating the collector:
+	collectorLoop.Retention = time.Duration(*retentionDays) * 24 * time.Hour
 
 	go func() {
 		defer close(collectorDone)
