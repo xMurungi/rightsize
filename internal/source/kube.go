@@ -135,7 +135,7 @@ func addStatus(spec *model.Spec, pod *corev1.Pod, containerName string) {
 // workloadName: see the label trick above.
 func workloadName(pod *corev1.Pod) string {
 	owner := metav1.GetControllerOf(pod)
-	if owner != nil {
+	if owner == nil {
 		return pod.Name
 	}
 
