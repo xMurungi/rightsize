@@ -28,6 +28,7 @@ func main() {
 	minHours := flag.Int("min-hours", 24, "hours of data needed before results are trusted")
 
 	retentionDays := flag.Int("retention-days", 14, "days of hourly rows to keep")
+	sourceName := flag.String("source", "fake", "where readings come from: fake | kube")
 
 	flag.Parse()
 
@@ -41,10 +42,29 @@ func main() {
 	}
 	defer hourlyStore.Close()
 
-	collectorLoop := collector.New(source.NewFake(time.Now().UnixNano()), hourlyStore, *interval)
-	collectorDone := make(chan struct{})
-	// ...after flag.Parse() and creating the collector:
+	var readings source.Source
+	switch *sourceName {
+	case "fake":
+		readings = source.NewFake(time.Now().UnixNano())
+	case "kube":
+		kubeConfig, err := source.LoadKubeConfig()
+		if err != nil {
+			log.Fatalf("kubernetes config: %v", err)
+		}
+		log.Printf("reading from Kubernetes API server %s", kubeConfig.Host) // so you always see WHICH cluster
+		readings, err = source.NewKube(kubeConfig)
+
+		if err != nil {
+			log.Fatalf("kubernetes client: %v", err)
+		}
+	default:
+		log.Fatalf("unknown -source %q (want fake or kube)", *sourceName)
+	}
+
+	collectorLoop := collector.New(readings, hourlyStore, *interval)
 	collectorLoop.Retention = time.Duration(*retentionDays) * 24 * time.Hour
+
+	collectorDone := make(chan struct{})
 
 	go func() {
 		defer close(collectorDone)
